@@ -16,17 +16,12 @@
 ARG ARCH_DIGEST=sha256:cb94be326bcdddf5244016021232dd75d27afe763e2901fadb0d7f09e15383d8
 
 #
-# Build image
+# Base image
 #
-FROM archlinux@${ARCH_DIGEST} as builder
+FROM archlinux@${ARCH_DIGEST} as base
 
-USER root
 RUN pacman -Syu --noconfirm --noprogressbar && \
     pacman -Sy --noconfirm --noprogressbar \
-    base-devel \
-    coreutils \
-    git \
-    go \
     gsl \
     libpng12 \
     lzo \
@@ -34,6 +29,19 @@ RUN pacman -Syu --noconfirm --noprogressbar && \
     qt5-base \
     qt5-multimedia \
     qt5-tools
+
+#
+# Build image
+#
+FROM base as builder
+
+USER root
+RUN pacman -Syu --noconfirm --noprogressbar && \
+    pacman -Sy --noconfirm --noprogressbar \
+    base-devel \
+    coreutils \
+    git \
+    go
 
 RUN useradd -m builder
 USER builder
@@ -46,23 +54,12 @@ RUN git clone https://aur.archlinux.org/mandelbulber2.git src && \
 #
 # Final image
 #
-FROM archlinux@${ARCH_DIGEST}
+FROM base as final
 
 ENV MANDELBULBER=/usr/sbin/mandelbulber2 \
     USER_UID=1001 \
     USER_NAME=mandelbulber \
     USER_HOME=/home/mandelbulber
-
-USER root
-RUN pacman -Syu --noconfirm --noprogressbar && \
-    pacman -Sy --noconfirm --noprogressbar \
-    gsl \
-    libpng12 \
-    lzo \
-    openmpi \
-    qt5-base \
-    qt5-multimedia \
-    qt5-tools
 
 COPY --from=builder /home/builder/src/*.pkg.tar.xz /tmp/
 RUN pacman -U /tmp/*.pkg.tar.xz  --noconfirm --noprogressbar && \
@@ -71,6 +68,7 @@ RUN pacman -U /tmp/*.pkg.tar.xz  --noconfirm --noprogressbar && \
 RUN useradd -m ${USER_NAME}
 
 COPY entrypoint.sh /usr/local/bin/entrypoint
+RUN mkdir -p /usr/share/doc/mandelbulber2
 RUN chown "${USER_UID}:0" "${USER_HOME}" && \
     chmod ug+rwx "${USER_HOME}"
 
